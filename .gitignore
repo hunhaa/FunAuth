@@ -1,5 +1,5 @@
 ```
-# Binary/compiled files
+# Binary and compiled files
 *.exe
 *.dll
 *.so
@@ -8,38 +8,23 @@
 *.out
 
 # Dependencies
-node_modules/
-venv/
-.venv/
-__pycache__/
-.mypy_cache/
-.pytest_cache/
-target/
-.gradle/
+vendor/
 
-# Editor/IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
+# Logs and temp files
+*.log
 *.tmp
 
-# System files
-.DS_Store
-Thumbs.db
+# Environment
 .env
 .env.local
 *.env.*
 
-# Logs
-*.log
+# Editors
+.vscode/
+.idea/
 
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
-# Build/dist directories
+# Build artifacts
 dist/
 build/
+target/
 ```

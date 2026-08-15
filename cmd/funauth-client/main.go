@@ -2,24 +2,42 @@ package main
 
 import (
 "bufio"
+"bytes"
+"encoding/json"
 "fmt"
+"io"
 "math/rand"
+"net/http"
 "os"
-"strconv"
 "strings"
 "time"
-
-"github.com/Yeah114/g79client"
 )
 
 func init() {
 rand.Seed(time.Now().UnixNano())
 }
 
+// LoginRequest 登录请求结构
+type LoginRequest struct {
+Username string `json:"username"`
+Password string `json:"password"`
+Cookie   string `json:"cookie"`
+}
+
+// LoginResponse 登录响应结构
+type LoginResponse struct {
+	Code int `json:"code"`
+	Data struct {
+		Token string `json:"token"`
+	} `json:"data"`
+	Message string `json:"message"`
+}
+
+const ServerURL = "http://127.0.0.1:8080"
+
 func main() {
 reader := bufio.NewReader(os.Stdin)
-var client *g79client.Client
-var cookie string
+var fbtoken string
 
 fmt.Println("========================================")
 fmt.Println("   FunAuth - 网易 MC 3.9 租赁服工具")
@@ -28,7 +46,7 @@ fmt.Println()
 
 for {
 fmt.Println("\n请选择操作:")
-fmt.Println("1. 设置 Cookie")
+fmt.Println("1. 登录获取 fbtoken (使用 Cookie)")
 fmt.Println("2. 搜索租赁服")
 fmt.Println("3. 查看可用租赁服列表")
 fmt.Println("4. 查看租赁服详情")
@@ -42,22 +60,44 @@ input = strings.TrimSpace(input)
 switch input {
 case "1":
 fmt.Print("请输入您的网易登录 Cookie: ")
-cookie, _ = reader.ReadString('\n')
+cookie, _ := reader.ReadString('\n')
 cookie = strings.TrimSpace(cookie)
 if cookie != "" {
-var err error
-client, err = g79client.NewClient()
+// 向验证服务器发送登录请求
+loginReq := LoginRequest{Cookie: cookie}
+jsonData, err := json.Marshal(loginReq)
 if err != nil {
-fmt.Printf("创建客户端失败：%v\n", err)
+fmt.Printf("JSON 编码失败：%v\n", err)
 break
 }
-err = client.G79AuthenticateWithCookie(cookie)
+
+resp, err := http.Post(ServerURL+"/api/phoenix/login", "application/json", bytes.NewBuffer(jsonData))
 if err != nil {
-fmt.Printf("认证失败：%v\n", err)
-} else {
+fmt.Printf("连接服务器失败：%v\n请确保 funauth-server 正在运行\n", err)
+break
+}
+defer resp.Body.Close()
+
+body, err := io.ReadAll(resp.Body)
+if err != nil {
+fmt.Printf("读取响应失败：%v\n", err)
+break
+}
+
+var loginResp LoginResponse
+if err := json.Unmarshal(body, &loginResp); err != nil {
+fmt.Printf("解析响应失败：%v\n", err)
+break
+}
+
+if loginResp.Code != 0 {
+fmt.Printf("登录失败：%s\n", loginResp.Message)
+break
+}
+
+fbtoken = loginResp.Data.Token
 fmt.Println("✓ 认证成功!")
 // 生成 fbtoken 文件
-fbtoken := cookie
 fileName := fmt.Sprintf("fbtoken-%s", generateRandomString(5))
 err = os.WriteFile(fileName, []byte(fbtoken), 0600)
 if err != nil {
@@ -66,11 +106,10 @@ fmt.Printf("警告：保存 token 文件失败：%v\n", err)
 fmt.Printf("✓ Token 已保存到文件：%s\n", fileName)
 }
 }
-}
 
 case "2":
-if client == nil {
-fmt.Println("请先设置 Cookie (选项 1)")
+if fbtoken == "" {
+fmt.Println("请先登录获取 fbtoken (选项 1)")
 break
 }
 fmt.Print("请输入要搜索的租赁服名称：")
@@ -81,45 +120,38 @@ fmt.Println("名称不能为空")
 break
 }
 fmt.Println("正在搜索...")
-result, err := client.SearchRentalServerByName(name)
+// 调用服务端 API 搜索
+req, _ := http.NewRequest("GET", ServerURL+"/api/open/g79/rental_search?keyword="+name, nil)
+req.Header.Set("Authorization", "Bearer "+fbtoken)
+resp, err := http.DefaultClient.Do(req)
 if err != nil {
-fmt.Printf("搜索失败：%v\n", err)
-} else {
-fmt.Printf("找到 %d 个结果:\n", len(result.Entities))
-for i, server := range result.Entities {
-fmt.Printf("%d. [ID: %s] %s - 在线：%s/%s\n", 
-i+1, server.WorldID, server.ServerName, 
-server.PlayerCount.String(), server.Capacity.String())
+fmt.Printf("请求失败：%v\n", err)
+break
 }
-}
+defer resp.Body.Close()
+body, _ := io.ReadAll(resp.Body)
+fmt.Printf("搜索结果：%s\n", string(body))
 
 case "3":
-if client == nil {
-fmt.Println("请先设置 Cookie (选项 1)")
+if fbtoken == "" {
+fmt.Println("请先登录获取 fbtoken (选项 1)")
 break
 }
 fmt.Println("正在获取可用租赁服列表...")
-result, err := client.GetAvailableRentalServers(0, 0, 0)
+req, _ := http.NewRequest("GET", ServerURL+"/api/open/g79/rental_available", nil)
+req.Header.Set("Authorization", "Bearer "+fbtoken)
+resp, err := http.DefaultClient.Do(req)
 if err != nil {
-fmt.Printf("获取失败：%v\n", err)
-} else {
-fmt.Printf("找到 %d 个可用租赁服:\n", len(result.Entities))
-for i, server := range result.Entities {
-statusStr := "未知"
-if s := server.Status.Int64(); s != 0 || server.Status.String() != "" {
-statusVal, _ := strconv.ParseInt(server.Status.String(), 10, 64)
-if statusVal != 0 || server.Status.String() == "0" {
-statusStr = getServerStatus(int(statusVal))
+fmt.Printf("请求失败：%v\n", err)
+break
 }
-}
-fmt.Printf("%d. [ID: %s] %s - 状态：%s\n", 
-i+1, server.WorldID, server.ServerName, statusStr)
-}
-}
+defer resp.Body.Close()
+body, _ := io.ReadAll(resp.Body)
+fmt.Printf("可用租赁服列表：%s\n", string(body))
 
 case "4":
-if client == nil {
-fmt.Println("请先设置 Cookie (选项 1)")
+if fbtoken == "" {
+fmt.Println("请先登录获取 fbtoken (选项 1)")
 break
 }
 fmt.Print("请输入租赁服 ID: ")
@@ -130,32 +162,20 @@ fmt.Println("ID 不能为空")
 break
 }
 fmt.Println("正在获取详情...")
-result, err := client.GetRentalServerDetails(worldID)
+req, _ := http.NewRequest("GET", ServerURL+"/api/open/g79/rental_details?world_id="+worldID, nil)
+req.Header.Set("Authorization", "Bearer "+fbtoken)
+resp, err := http.DefaultClient.Do(req)
 if err != nil {
-fmt.Printf("获取详情失败：%v\n", err)
-} else {
-fmt.Println("\n=== 租赁服详情 ===")
-fmt.Printf("名称：%s\n", result.Entity.Name)
-fmt.Printf("ID: %s\n", result.Entity.WorldID)
-if result.Entity.BriefSummary != "" {
-fmt.Printf("描述：%s\n", result.Entity.BriefSummary)
+fmt.Printf("请求失败：%v\n", err)
+break
 }
-playerCount := result.Entity.PlayerCount.Int64()
-capacity := result.Entity.Capacity.Int64()
-if playerCount != 0 || capacity != 0 {
-fmt.Printf("在线人数：%d/%d\n", playerCount, capacity)
-}
-status := result.Entity.Status.Int64()
-if status != 0 || result.Entity.Status.String() == "0" {
-fmt.Printf("状态：%s\n", getServerStatus(int(status)))
-}
-fmt.Printf("版本：%s\n", result.Entity.McVersion)
-fmt.Printf("类型：%s\n", result.Entity.ServerType)
-}
+defer resp.Body.Close()
+body, _ := io.ReadAll(resp.Body)
+fmt.Printf("租赁服详情：%s\n", string(body))
 
 case "5":
-if client == nil {
-fmt.Println("请先设置 Cookie (选项 1)")
+if fbtoken == "" {
+fmt.Println("请先登录获取 fbtoken (选项 1)")
 break
 }
 fmt.Print("请输入租赁服 ID: ")
@@ -170,12 +190,19 @@ password, _ := reader.ReadString('\n')
 password = strings.TrimSpace(password)
 
 fmt.Println("正在获取进入凭证...")
-authResult, err := client.GenerateRentalGameAuthV2(worldID, password)
+enterReq := map[string]string{"world_id": worldID, "password": password}
+jsonData, _ := json.Marshal(enterReq)
+req, _ := http.NewRequest("POST", ServerURL+"/api/open/g79/rental_enter_world", bytes.NewBuffer(jsonData))
+req.Header.Set("Authorization", "Bearer "+fbtoken)
+req.Header.Set("Content-Type", "application/json")
+resp, err := http.DefaultClient.Do(req)
 if err != nil {
-fmt.Printf("获取认证失败：%v\n", err)
+fmt.Printf("请求失败：%v\n", err)
 break
 }
-fmt.Printf("\n✓ 认证成功!\n原始响应：%s\n", string(authResult))
+defer resp.Body.Close()
+body, _ := io.ReadAll(resp.Body)
+fmt.Printf("\n✓ 认证成功!\n原始响应：%s\n", string(body))
 fmt.Println("\n请在游戏中使用以上信息加入服务器")
 
 case "6":
