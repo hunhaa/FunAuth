@@ -1,48 +1,59 @@
 ```
-# Go build artifacts
-*.o
-*.a
-*.so
-*.exe
-*.dll
-*.dylib
-*.test
-*.prof
-
-# Go cache and tools
-.cache/
-go/pkg/
-go/bin/
-
-# Binaries
-bin/
-pkg/
-
-# Temporary files
-*.tmp
-*.swp
-*~
-.DS_Store
-Thumbs.db
+# Executables
+cp/funauth-client
+funauth-client
 
 # Environment variables
 .env
 .env.local
 *.env.*
 
-# Logs
-*.log
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.egg-info/
+dist/
+build/
+target/
 
-# Coverage
-coverage/
-htmlcov/
-.coverage
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
 
 # Editors
 .vscode/
 .idea/
-*.swp
-*.swo
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# Python specific
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Compiled files
+*.class
+*.o
+*.a
+*.lib
+*.obj
+*.out
+*.exe
+*.dll
+*.so
 
 # Compressed files
 *.zip
