@@ -101,15 +101,8 @@ type transferServerEntry struct {
 }
 
 func selectTransferServer(cli *g79client.Client) (string, string, error) {
-	release := cli.ReleaseJSON
-	if release == nil {
-		r, err := cli.GetReleaseJSON()
-		if err != nil {
-			return "", "", fmt.Errorf("SelectTransferServer: %w", err)
-		}
-		release = r
-	}
-
+	release := &cli.ReleaseJSON
+	
 	resp, err := http.Get(release.TransferServerUrl)
 	if err != nil {
 		return "", "", fmt.Errorf("SelectTransferServer: %w", err)

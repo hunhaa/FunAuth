@@ -216,6 +216,6 @@ func Login(ctx context.Context, cli *g79.Client, p LoginParams) (LoginResult, er
 	result.IP = ipAddress
 	result.BotLevel = int(cli.UserDetail.Level.Int64())
 	result.EngineVersion = cli.EngineVersion
-	result.PatchVersion = cli.LatestVersion
+	result.PatchVersion = cli.G79LatestVersion
 	return result, nil
 }
