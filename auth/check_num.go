@@ -15,7 +15,7 @@ func TransferCheckNum(ctx context.Context, data, engineVersion, patchVersion str
 		engineVersion = g79.EngineVersion
 	}
 	if patchVersion == "" {
-		latestVersion, err := g79.GetGlobalLatestVersion()
+		latestVersion, err := g79.GetGlobalG79LatestVersion()
 		if err != nil {
 			return "", fmt.Errorf("get latest version failed")
 		}
@@ -23,7 +23,7 @@ func TransferCheckNum(ctx context.Context, data, engineVersion, patchVersion str
 	}
 
 	python3Path := os.Getenv("FUNAUTH_PYTHON3")
-	value, err := unmcpk.GenerateTransferCheckNum(data, engineVersion, patchVersion, python3Path)
+	value, err := unmcpk.GenerateTransferCheckNum(false, data, engineVersion, patchVersion, python3Path)
 	if err != nil {
 		return "", err
 	}
